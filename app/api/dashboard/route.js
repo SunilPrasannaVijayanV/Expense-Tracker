@@ -52,16 +52,21 @@ export async function GET() {
     ]);
 
     // 5. Recent Expenses
-    const recentExpenses = await Expense.find({ userId: user.id })
+    const rawRecent = await Expense.find({ userId: user.id })
       .sort({ date: -1, createdAt: -1 })
       .limit(5);
+    
+    const recentExpenses = rawRecent.map(exp => ({
+      ...exp.toObject(),
+      id: exp._id.toString()
+    }));
 
     // 6. Budget Status
-    const budgets = await Budget.find({ userId: user.id, month: currentMonth });
-    const budgetStatus = budgets.map(b => {
+    const rawBudgets = await Budget.find({ userId: user.id, month: currentMonth });
+    const budgetStatus = rawBudgets.map(b => {
       const spent = categoryBreakdown.find(c => c.category === b.category)?.total || 0;
       return {
-        id: b._id,
+        id: b._id.toString(),
         category: b.category,
         amount: b.amount,
         spent,

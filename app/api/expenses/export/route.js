@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import getDb from '@/lib/db/database';
+import dbConnect from '@/lib/db/mongodb';
+import Expense from '@/lib/db/models/Expense';
 import { getUser } from '@/lib/auth';
 
 export async function GET(request) {
@@ -18,26 +19,34 @@ export async function GET(request) {
     const sortOrder = searchParams.get('sortOrder') || 'DESC';
     const paymentMethod = searchParams.get('paymentMethod');
 
-    const db = getDb();
-    let where = ['e.user_id = ?'];
-    let params = [user.id];
+    await dbConnect();
 
-    if (category) { where.push('e.category = ?'); params.push(category); }
-    if (startDate) { where.push('e.date >= ?'); params.push(startDate); }
-    if (endDate) { where.push('e.date <= ?'); params.push(endDate); }
-    if (minAmount) { where.push('e.amount >= ?'); params.push(parseFloat(minAmount)); }
-    if (maxAmount) { where.push('e.amount <= ?'); params.push(parseFloat(maxAmount)); }
-    if (paymentMethod) { where.push('e.payment_method = ?'); params.push(paymentMethod); }
-    if (search) { where.push('(e.description LIKE ? OR e.merchant LIKE ?)'); params.push(`%${search}%`, `%${search}%`); }
+    const query = { userId: user.id };
 
-    const whereClause = where.join(' AND ');
-    const validSortColumns = ['date', 'amount', 'category', 'created_at'];
-    const sortCol = validSortColumns.includes(sortBy) ? sortBy : 'date';
-    const sortDir = sortOrder === 'ASC' ? 'ASC' : 'DESC';
+    if (category && category !== 'All') query.category = category;
+    if (paymentMethod) query.paymentMethod = paymentMethod;
 
-    const expenses = db.prepare(
-      `SELECT e.* FROM expenses e WHERE ${whereClause} ORDER BY e.${sortCol} ${sortDir}, e.created_at DESC`
-    ).all(...params);
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) query.date.$gte = startDate;
+      if (endDate) query.date.$lte = endDate;
+    }
+
+    if (minAmount || maxAmount) {
+      query.amount = {};
+      if (minAmount) query.amount.$gte = parseFloat(minAmount);
+      if (maxAmount) query.amount.$lte = parseFloat(maxAmount);
+    }
+
+    if (search) {
+      query.$or = [
+        { description: { $regex: search, $options: 'i' } },
+        { merchant: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const sortDir = sortOrder === 'ASC' ? 1 : -1;
+    const expenses = await Expense.find(query).sort({ [sortBy]: sortDir, createdAt: -1 });
 
     // Build CSV
     const escapeCell = (val) => {
@@ -52,7 +61,7 @@ export async function GET(request) {
       e.description || '',
       e.category,
       e.merchant || '',
-      (e.payment_method || 'cash').replace(/_/g, ' '),
+      (e.paymentMethod || 'cash').replace(/_/g, ' '),
       Number(e.amount).toFixed(2),
     ].map(escapeCell).join(','));
 

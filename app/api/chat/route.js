@@ -152,11 +152,12 @@ export async function POST(request) {
         const { name, args } = part.functionCall;
         console.log(`[AI] Tool Call: ${name}`, args);
 
-        const toolResult = executeToolCall(name, args, user.id, allNewExpenseIds);
+        const toolResult = await executeToolCall(name, args, user.id, allNewExpenseIds);
 
         if (toolResult.error) {
           console.error(`[AI] Tool Error: ${name}`, toolResult.error);
         } else if (toolResult.newExpenseIds) {
+          // Keep track of any new expenses created for reference (like "update that")
           allNewExpenseIds.push(...toolResult.newExpenseIds);
         }
 

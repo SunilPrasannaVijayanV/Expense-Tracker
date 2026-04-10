@@ -45,7 +45,11 @@ export async function GET(request) {
       ];
     }
 
-    const expenses = await Expense.find(query).sort({ date: -1, createdAt: -1 });
+    const rawExpenses = await Expense.find(query).sort({ date: -1, createdAt: -1 });
+    const expenses = rawExpenses.map(exp => ({
+      ...exp.toObject(),
+      id: exp._id.toString()
+    }));
 
     return NextResponse.json({ expenses });
   } catch (error) {

@@ -182,7 +182,7 @@ export default function DashboardPage() {
                 <p className="card-subtitle">Spending by category</p>
               </div>
             </div>
-            <div className="chart-container">
+            <div className="chart-container" style={{ minHeight: '280px' }}>
               {pieData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -195,8 +195,8 @@ export default function DashboardPage() {
                       paddingAngle={3}
                       dataKey="value"
                     >
-                      {pieData.map((_, i) => (
-                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      {pieData.map((d, i) => (
+                        <Cell key={`cell-${d.name}-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip content={<CustomTooltip />} />
@@ -230,7 +230,7 @@ export default function DashboardPage() {
                 <p className="card-subtitle">Daily breakdown this month</p>
               </div>
             </div>
-            <div className="chart-container">
+            <div className="chart-container" style={{ minHeight: '280px' }}>
               {dailyData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={dailyData}>
@@ -265,7 +265,7 @@ export default function DashboardPage() {
               <span className="card-title">Monthly Trend</span>
               <span className="card-subtitle">Last 6 months</span>
             </div>
-            <div className="chart-container">
+            <div className="chart-container" style={{ minHeight: '200px' }}>
               {trendData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={trendData}>
@@ -294,7 +294,7 @@ export default function DashboardPage() {
             {(data?.recentExpenses || []).length > 0 ? (
               <div>
                 {data.recentExpenses.map(exp => (
-                  <div key={exp.id} style={{
+                  <div key={exp._id || exp.id} style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '12px 0', borderBottom: '1px solid var(--border-color)',
                   }}>
