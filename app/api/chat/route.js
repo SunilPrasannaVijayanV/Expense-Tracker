@@ -29,21 +29,19 @@ Rules:
 Today's date is: ${new Date().toISOString().split('T')[0]}`;
 
 // Models to try in order (fallback chain)
-// Models to try in order (fallback chain)
 const MODELS_TO_TRY = [
-  'gemini-1.5-flash',
-  'gemini-1.5-flash-8b',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-exp',
-  'gemini-2.5-flash',
-  'gemini-3.1-flash',
-  'gemini-3.1-pro',
-  'gemini-1.5-pro'
+  'gemini-3-flash-preview'
 ];
 
-async function tryGenerateWithFallback(genAI, contents, maxRetries = 2) {
+async function tryGenerateWithFallback(genAI, contents, preferredModel = null, maxRetries = 2) {
   let lastSeenError = 'No models tried';
-  for (const modelName of MODELS_TO_TRY) {
+
+  // Create a priority list: preferred model first, then the others
+  const modelsToTry = preferredModel
+    ? [preferredModel, ...MODELS_TO_TRY.filter(m => m !== preferredModel)]
+    : MODELS_TO_TRY;
+
+  for (const modelName of modelsToTry) {
     console.log(`[AI] Attempting ${modelName}...`);
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
@@ -116,7 +114,7 @@ export async function POST(request) {
     // Try to generate with fallback models
     let genResult;
     let lastErrorMsg = '';
-    
+
     try {
       genResult = await tryGenerateWithFallback(genAI, contents);
     } catch (e) {
@@ -141,10 +139,9 @@ export async function POST(request) {
       const candidate = response.candidates?.[0];
       if (!candidate) break;
 
-      const parts = candidate.content?.parts;
-      if (!parts) break;
-
+      const parts = candidate.content?.parts || [];
       const functionCalls = parts.filter(p => p.functionCall);
+
       if (functionCalls.length === 0) break;
 
       console.log(`[AI] Executing ${functionCalls.length} tool(s)...`);
@@ -171,46 +168,57 @@ export async function POST(request) {
         });
       }
 
-      // Send the model's entire turn and the tool's results back
-      // IMPORTANT: We must include ALL parts from the candidate (including text/thoughts)
-      // for the conversation to maintain its structure correctly.
+      // Add history
       contents.push(candidate.content);
       contents.push({ role: 'function', parts: functionResponses });
 
+      // Robust next generation with fallback
       try {
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          systemInstruction: SYSTEM_PROMPT,
-          tools: [{ functionDeclarations: toolDeclarations }],
-        });
-        result = await model.generateContent({ contents });
+        const nextResult = await tryGenerateWithFallback(genAI, contents, modelName);
+        if (!nextResult || nextResult.error) {
+          console.error('[AI] Generation failed in tool loop');
+          break;
+        }
+
+        result = nextResult.result;
         response = result.response;
+        modelName = nextResult.modelName;
       } catch (error) {
-        console.error('Error in function call chain:', error);
+        console.error('[AI] Fatal error in tool loop:', error);
         break;
       }
       maxIterations--;
     }
 
-    // Extract text response
-    const textParts = response.candidates?.[0]?.content?.parts?.filter(p => p.text) || [];
-    const reply = textParts.map(p => p.text).join('\n') || "I'm sorry, I couldn't process that request. Could you try rephrasing?";
+    // Extract final response
+    const candidate = response.candidates?.[0];
+    const textParts = candidate?.content?.parts?.filter(p => p.text) || [];
+    const thoughtParts = candidate?.content?.parts?.filter(p => p.thought) || [];
+
+    let reply = textParts.map(p => p.text).join('\n').trim();
+
+    if (!reply && thoughtParts.length > 0) {
+      reply = thoughtParts.map(p => p.thought).join('\n').trim();
+    }
+
+    if (!reply) {
+      reply = "I've analyzed your data, but I couldn't generate a specific response. Could you try asking in a different way?";
+    }
 
     return NextResponse.json({ reply, newExpenseIds: allNewExpenseIds });
   } catch (error) {
     console.error('Chat error:', error);
 
-    // Check if it's a quota error specifically
     if (error.message?.includes('429') || error.message?.includes('quota')) {
       return NextResponse.json({
         reply: "⚠️ **API Quota Exceeded** — Please wait a minute and try again, or get a new API key at [aistudio.google.com](https://aistudio.google.com).",
         newExpenseIds: [],
-      });
+      }, { status: 429 });
     }
 
     return NextResponse.json({
       reply: `Sorry, I encountered an error. Please try again in a moment.`,
       newExpenseIds: [],
-    });
+    }, { status: 500 });
   }
 }

@@ -1,97 +1,93 @@
 import { NextResponse } from 'next/server';
-import getDb from '@/lib/db/database';
+import dbConnect from '@/lib/db/mongodb';
+import Expense from '@/lib/db/models/Expense';
+import Budget from '@/lib/db/models/Budget';
 import { getUser } from '@/lib/auth';
+import mongoose from 'mongoose';
 
 export async function GET() {
   try {
     const user = await getUser();
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    const db = getDb();
+    await dbConnect();
 
-    // Current month dates
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+    const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM
+    
+    // 1. Total This Month
+    const totalMonthResult = await Expense.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(user.id), date: { $regex: `^${currentMonth}` } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+    const totalMonth = totalMonthResult[0]?.total || 0;
 
-    // Total this month
-    const totalMonth = db.prepare(
-      'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE user_id = ? AND date >= ? AND date <= ?'
-    ).get(user.id, monthStart, monthEnd);
+    // 2. Daily Average This Month
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const currentDay = now.getDate();
+    const dailyAverage = totalMonth / currentDay;
 
-    // Total last month
-    const totalLastMonth = db.prepare(
-      'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE user_id = ? AND date >= ? AND date <= ?'
-    ).get(user.id, lastMonthStart, lastMonthEnd);
+    // 3. Category Breakdown
+    const categoryBreakdown = await Expense.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(user.id), date: { $regex: `^${currentMonth}` } } },
+      { $group: { _id: '$category', total: { $sum: '$amount' } } },
+      { $project: { category: '$_id', total: 1, _id: 0 } },
+      { $sort: { total: -1 } }
+    ]);
 
-    // Category breakdown this month
-    const categoryBreakdown = db.prepare(
-      'SELECT category, SUM(amount) as total, COUNT(*) as count FROM expenses WHERE user_id = ? AND date >= ? AND date <= ? GROUP BY category ORDER BY total DESC'
-    ).all(user.id, monthStart, monthEnd);
+    // 4. Monthly Trending (Last 6 months)
+    const monthlyTrending = await Expense.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(user.id) } },
+      {
+        $group: {
+          _id: { $substr: ['$date', 0, 7] },
+          total: { $sum: '$amount' }
+        }
+      },
+      { $project: { month: '$_id', total: 1, _id: 0 } },
+      { $sort: { month: -1 } },
+      { $limit: 6 }
+    ]);
 
-    // Daily spending this month
-    const dailySpending = db.prepare(
-      'SELECT date, SUM(amount) as total FROM expenses WHERE user_id = ? AND date >= ? AND date <= ? GROUP BY date ORDER BY date'
-    ).all(user.id, monthStart, monthEnd);
+    // 5. Recent Expenses
+    const recentExpenses = await Expense.find({ userId: user.id })
+      .sort({ date: -1, createdAt: -1 })
+      .limit(5);
 
-    // Monthly spending last 6 months
-    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString().split('T')[0];
-    const monthlyTrending = db.prepare(
-      `SELECT strftime('%Y-%m', date) as month, SUM(amount) as total, COUNT(*) as count 
-       FROM expenses WHERE user_id = ? AND date >= ? GROUP BY month ORDER BY month`
-    ).all(user.id, sixMonthsAgo);
-
-    // Total expenses count
-    const expenseCount = db.prepare(
-      'SELECT COUNT(*) as count FROM expenses WHERE user_id = ? AND date >= ? AND date <= ?'
-    ).get(user.id, monthStart, monthEnd);
-
-    // Recent expenses
-    const recentExpenses = db.prepare(
-      'SELECT * FROM expenses WHERE user_id = ? ORDER BY date DESC, created_at DESC LIMIT 5'
-    ).all(user.id);
-
-    // Budget status
-    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const budgets = db.prepare(
-      'SELECT * FROM budgets WHERE user_id = ? AND month = ?'
-    ).all(user.id, currentMonthKey);
-
+    // 6. Budget Status
+    const budgets = await Budget.find({ userId: user.id, month: currentMonth });
     const budgetStatus = budgets.map(b => {
-      const spent = categoryBreakdown.find(c => c.category === b.category);
+      const spent = categoryBreakdown.find(c => c.category === b.category)?.total || 0;
       return {
-        ...b,
-        spent: spent ? spent.total : 0,
-        percentage: spent ? Math.round((spent.total / b.amount) * 100) : 0,
+        id: b._id,
+        category: b.category,
+        amount: b.amount,
+        spent,
+        percentage: (spent / b.amount) * 100
       };
     });
 
-    // Top merchants
-    const topMerchants = db.prepare(
-      `SELECT merchant, SUM(amount) as total, COUNT(*) as count FROM expenses 
-       WHERE user_id = ? AND date >= ? AND date <= ? AND merchant IS NOT NULL AND merchant != ''
-       GROUP BY merchant ORDER BY total DESC LIMIT 5`
-    ).all(user.id, monthStart, monthEnd);
-
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const daysPassed = now.getDate();
+    // 7. Monthly Change (%)
+    const lastMonthRaw = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonth = lastMonthRaw.toISOString().slice(0, 7);
+    const lastMonthResult = await Expense.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(user.id), date: { $regex: `^${lastMonth}` } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+    const totalLastMonth = lastMonthResult[0]?.total || 0;
+    const monthlyChange = totalLastMonth === 0 ? 0 : ((totalMonth - totalLastMonth) / totalLastMonth) * 100;
 
     return NextResponse.json({
-      totalMonth: totalMonth.total,
-      totalLastMonth: totalLastMonth.total,
-      monthlyChange: totalLastMonth.total > 0 
-        ? (((totalMonth.total - totalLastMonth.total) / totalLastMonth.total) * 100).toFixed(1)
-        : 0,
-      dailyAverage: daysPassed > 0 ? (totalMonth.total / daysPassed).toFixed(2) : 0,
-      expenseCount: expenseCount.count,
+      totalMonth,
+      dailyAverage,
+      monthlyChange: monthlyChange.toFixed(1),
       categoryBreakdown,
-      dailySpending,
-      monthlyTrending,
+      monthlyTrending: monthlyTrending.reverse(),
       recentExpenses,
       budgetStatus,
-      topMerchants,
+      expenseCount: await Expense.countDocuments({ userId: user.id, date: { $regex: `^${currentMonth}` } })
     });
   } catch (error) {
     console.error('Dashboard error:', error);

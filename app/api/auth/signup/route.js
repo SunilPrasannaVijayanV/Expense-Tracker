@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import getDb from '@/lib/db/database';
+import dbConnect from '@/lib/db/mongodb';
+import User from '@/lib/db/models/User';
 import { signToken } from '@/lib/auth';
 
 export async function POST(request) {
@@ -8,31 +9,41 @@ export async function POST(request) {
     const { name, email, password } = await request.json();
 
     if (!name || !email || !password) {
-      return NextResponse.json({ error: 'Name, email, and password are required' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    if (password.length < 6) {
-      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
+    await dbConnect();
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return NextResponse.json({ error: 'User already exists' }, { status: 400 });
     }
 
-    const db = getDb();
-
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-    if (existing) {
-      return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
-    }
-
+    // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
-    const result = db.prepare('INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)').run(name, email, passwordHash);
 
-    const token = signToken({ id: result.lastInsertRowid, name, email });
+    // Create user
+    const user = await User.create({
+      name,
+      email,
+      password_hash: passwordHash,
+    });
 
-    const response = NextResponse.json({ message: 'Account created successfully', user: { id: result.lastInsertRowid, name, email } });
+    // Generate token
+    const token = signToken({ id: user._id.toString(), email: user.email });
+
+    const response = NextResponse.json(
+      { message: 'User created successfully', user: { id: user._id, name: user.name, email: user.email } },
+      { status: 201 }
+    );
+
+    // Set cookie
     response.cookies.set('token', token, {
       httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60, // 30 days
       path: '/',
     });
 
