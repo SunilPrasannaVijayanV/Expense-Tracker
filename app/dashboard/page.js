@@ -1,42 +1,38 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, ShoppingBag, Target, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { DollarSign, TrendingUp, ShoppingBag, Target, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import Sidebar from '@/components/Sidebar';
 import ChatBot from '@/components/ChatBot';
 
-const CHART_COLORS = [
-  'hsl(245, 100%, 70%)', // Primary
-  'hsl(170, 100%, 45%)', // Secondary
-  'hsl(280, 100%, 70%)', // Violet
-  'hsl(35, 100%, 65%)',  // Warning
-  'hsl(0, 100%, 65%)',   // Danger
-  'hsl(190, 100%, 50%)', // Info
-];
+const CHART_COLORS = ['#7C6FFF', '#1DB954', '#a78bfa', '#FFB347', '#FF6B6B', '#45B7D1'];
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
       <div style={{
-        background: 'var(--bg-deep)', 
-        border: '1px solid var(--border-light)',
-        borderRadius: '12px', 
-        padding: '12px 16px', 
-        fontSize: '0.85rem',
-        boxShadow: '0 10px 20px rgba(0,0,0,0.3)',
-        backdropFilter: 'blur(10px)'
+        background: 'var(--bg-elevated)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: '10px',
+        padding: '10px 14px',
+        fontSize: '0.8rem',
+        boxShadow: 'var(--shadow-md)',
       }}>
-        <p style={{ color: 'var(--text-dim)', marginBottom: '6px', fontWeight: 600 }}>{label}</p>
+        <p style={{ color: 'var(--text-muted)', marginBottom: '4px', fontWeight: 600 }}>{label}</p>
         {payload.map((p, i) => (
           <p key={i} style={{ color: p.color }}>
-            {p.name}: ${Number(p.value).toFixed(2)}
+            {p.name}: ₹{Number(p.value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </p>
         ))}
       </div>
     );
   }
   return null;
+};
+
+const formatINR = (amount) => {
+  return Number(amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 export default function DashboardPage() {
@@ -49,16 +45,12 @@ export default function DashboardPage() {
     try {
       const res = await fetch('/api/dashboard', { signal: controller.signal });
       clearTimeout(timeout);
-      if (res.status === 401) {
-        window.location.href = '/login';
-        return;
-      }
+      if (res.status === 401) { window.location.href = '/login'; return; }
       const d = await res.json();
       setData(d);
     } catch (err) {
       clearTimeout(timeout);
       if (retryOnce) {
-        // Wait 1s then retry once — handles transient failures after long AI calls
         setTimeout(() => fetchDashboard(false), 1000);
       } else {
         console.error('Dashboard fetch error:', err);
@@ -67,7 +59,6 @@ export default function DashboardPage() {
       setLoading(false);
     }
   }, []);
-
 
   useEffect(() => {
     fetchDashboard();
@@ -82,7 +73,7 @@ export default function DashboardPage() {
         <Sidebar />
         <main className="main-content">
           <div className="flex-center" style={{ height: '60vh' }}>
-            <div className="loading-spinner" style={{ width: 40, height: 40 }}></div>
+            <div className="loading-spinner" style={{ width: 36, height: 36 }}></div>
           </div>
         </main>
       </div>
@@ -99,102 +90,78 @@ export default function DashboardPage() {
     total: m.total,
   }));
 
-  const dailyData = (data?.dailySpending || []).map(d => ({
-    name: d.date.slice(5),
-    amount: d.total,
-  }));
-
   return (
     <div className="app-layout">
       <Sidebar />
       <main className="main-content">
         <div className="page-header animate-in">
           <div>
-            <h1 className="text-gradient">Financial Hub</h1>
-            <p className="text-dim">Your cosmic overview of spending and wealth</p>
-          </div>
-          <div className="header-actions">
-            <button className="btn btn-secondary glass">
-              <TrendingUp size={16} />
-              <span>Insights</span>
-            </button>
+            <h1>Financial Hub</h1>
+            <p className="text-dim">Your overview of spending and wealth</p>
           </div>
         </div>
 
         {/* Stats Cards */}
         <div className="stats-grid">
-          <div className="stat-card glass animate-in" style={{ animationDelay: '0.1s' }}>
+          <div className="stat-card animate-in" style={{ animationDelay: '0.1s' }}>
             <div className="stat-card-header">
-              <span className="stat-card-label">Monthly Spending</span>
-              <div className="stat-card-icon"><DollarSign size={20} /></div>
+              <span className="stat-card-label">Monthly Spend</span>
+              <div className="stat-card-icon"><DollarSign size={18} /></div>
             </div>
-            <div className="stat-card-value">${Number(data?.totalMonth || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            <div className="stat-card-value">₹{formatINR(data?.totalMonth)}</div>
             <div className={`stat-card-change ${Number(data?.monthlyChange) >= 0 ? 'negative' : 'positive'}`}>
               {Number(data?.monthlyChange) >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-              {Math.abs(data?.monthlyChange || 0)}% <span style={{ opacity: 0.6, fontSize: '0.75rem' }}>vs last month</span>
+              {Math.abs(data?.monthlyChange || 0)}%
+              <span style={{ opacity: 0.6, fontSize: '0.65rem', marginLeft: 2 }}>vs last month</span>
             </div>
           </div>
 
-          <div className="stat-card glass animate-in" style={{ animationDelay: '0.2s' }}>
+          <div className="stat-card animate-in" style={{ animationDelay: '0.15s' }}>
             <div className="stat-card-header">
-              <span className="stat-card-label">Daily Burn Rate</span>
-              <div className="stat-card-icon"><TrendingUp size={20} /></div>
+              <span className="stat-card-label">Daily Average</span>
+              <div className="stat-card-icon"><TrendingUp size={18} /></div>
             </div>
-            <div className="stat-card-value">${Number(data?.dailyAverage || 0).toFixed(2)}</div>
-            <div className="stat-card-change" style={{ color: 'var(--text-muted)' }}>
-              Average daily spend
-            </div>
+            <div className="stat-card-value">₹{formatINR(data?.dailyAverage)}</div>
+            <div className="stat-card-change">Per day this month</div>
           </div>
 
-          <div className="stat-card glass animate-in" style={{ animationDelay: '0.3s' }}>
+          <div className="stat-card animate-in" style={{ animationDelay: '0.2s' }}>
             <div className="stat-card-header">
               <span className="stat-card-label">Transactions</span>
-              <div className="stat-card-icon"><ShoppingBag size={20} /></div>
+              <div className="stat-card-icon"><ShoppingBag size={18} /></div>
             </div>
             <div className="stat-card-value">{data?.expenseCount || 0}</div>
-            <div className="stat-card-change" style={{ color: 'var(--text-muted)' }}>
-              Active logs this month
-            </div>
+            <div className="stat-card-change">This month</div>
           </div>
 
-          <div className="stat-card glass animate-in" style={{ animationDelay: '0.4s' }}>
+          <div className="stat-card animate-in" style={{ animationDelay: '0.25s' }}>
             <div className="stat-card-header">
-              <span className="stat-card-label">Active Budgets</span>
-              <div className="stat-card-icon"><Target size={20} /></div>
+              <span className="stat-card-label">Budgets</span>
+              <div className="stat-card-icon"><Target size={18} /></div>
             </div>
             <div className="stat-card-value">
               {data?.budgetStatus?.filter(b => b.percentage < 100).length || 0}
-              <span style={{ fontSize: '1rem', color: 'var(--text-muted)', fontWeight: 400 }}> / {data?.budgetStatus?.length || 0}</span>
+              <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 400 }}> / {data?.budgetStatus?.length || 0}</span>
             </div>
-            <div className="stat-card-change positive">
-              Healthy & On track
-            </div>
+            <div className="stat-card-change positive">On track</div>
           </div>
         </div>
 
-        {/* Charts Row */}
-        <div className="grid-2" style={{ marginBottom: 24 }}>
-          {/* Category Pie Chart */}
-          <div className="card glass animate-in" style={{ animationDelay: '0.5s' }}>
+        {/* Charts */}
+        <div className="grid-2" style={{ marginBottom: 16 }}>
+          {/* Category Pie */}
+          <div className="card animate-in" style={{ animationDelay: '0.3s' }}>
             <div className="card-header">
               <div>
                 <h3 className="card-title">Allocation</h3>
-                <p className="card-subtitle">Spending by category</p>
+                <p className="card-subtitle">By category</p>
               </div>
             </div>
-            <div className="chart-container" style={{ minHeight: '280px' }}>
+            <div className="chart-container">
               {pieData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={3}
-                      dataKey="value"
-                    >
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={3} dataKey="value">
                       {pieData.map((d, i) => (
                         <Cell key={`cell-${d.name}-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                       ))}
@@ -209,132 +176,89 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-            {/* Legend */}
             {pieData.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
                 {pieData.slice(0, 6).map((d, i) => (
-                  <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: CHART_COLORS[i % CHART_COLORS.length] }}></div>
-                    {d.name}: ${d.value.toFixed(0)}
+                  <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: CHART_COLORS[i % CHART_COLORS.length] }}></div>
+                    {d.name}: ₹{d.value.toFixed(0)}
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Daily Spending Area Chart */}
-          <div className="card glass animate-in" style={{ animationDelay: '0.6s' }}>
+          {/* Monthly Trend */}
+          <div className="card animate-in" style={{ animationDelay: '0.35s' }}>
             <div className="card-header">
               <div>
-                <h3 className="card-title">Spending Velocity</h3>
-                <p className="card-subtitle">Daily breakdown this month</p>
+                <h3 className="card-title">Monthly Trend</h3>
+                <p className="card-subtitle">Last 6 months</p>
               </div>
             </div>
-            <div className="chart-container" style={{ minHeight: '280px' }}>
-              {dailyData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={dailyData}>
-                    <defs>
-                      <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#6C63FF" stopOpacity={0.3} />
-                        <stop offset="100%" stopColor="#6C63FF" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="name" stroke="#5C5C72" fontSize={11} />
-                    <YAxis stroke="#5C5C72" fontSize={11} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Area type="monotone" dataKey="amount" stroke="#6C63FF" fill="url(#colorAmount)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="empty-state">
-                  <div className="empty-state-icon">📈</div>
-                  <p>No data to show yet</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Monthly Trend + Recent Transactions */}
-        <div className="grid-2">
-          {/* Monthly Trend */}
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">Monthly Trend</span>
-              <span className="card-subtitle">Last 6 months</span>
-            </div>
-            <div className="chart-container" style={{ minHeight: '200px' }}>
+            <div className="chart-container">
               {trendData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={trendData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="name" stroke="#5C5C72" fontSize={11} />
-                    <YAxis stroke="#5C5C72" fontSize={11} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <XAxis dataKey="name" stroke="#6A6A80" fontSize={10} />
+                    <YAxis stroke="#6A6A80" fontSize={10} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="total" fill="#6C63FF" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="total" fill="#7C6FFF" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="empty-state">
                   <div className="empty-state-icon">📊</div>
-                  <p>Start tracking expenses to see trends</p>
+                  <p>Start tracking to see trends</p>
                 </div>
               )}
             </div>
           </div>
+        </div>
 
-          {/* Recent Transactions */}
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">Recent Transactions</span>
-              <span className="card-subtitle">Latest 5</span>
-            </div>
-            {(data?.recentExpenses || []).length > 0 ? (
-              <div>
-                {data.recentExpenses.map(exp => (
-                  <div key={exp._id || exp.id} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '12px 0', borderBottom: '1px solid var(--border-color)',
-                  }}>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                        {exp.description || exp.category}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {exp.category} • {exp.date}
-                      </div>
-                    </div>
-                    <div style={{ fontWeight: 700, color: 'var(--accent-danger)' }}>
-                      -${Number(exp.amount).toFixed(2)}
+        {/* Recent Transactions */}
+        <div className="card animate-in" style={{ animationDelay: '0.4s' }}>
+          <div className="card-header">
+            <span className="card-title">Recent Transactions</span>
+            <span className="card-subtitle">Latest 5</span>
+          </div>
+          {(data?.recentExpenses || []).length > 0 ? (
+            <div className="expense-card-list">
+              {data.recentExpenses.map(exp => (
+                <div key={exp._id || exp.id} className="expense-card-item">
+                  <div className="expense-card-left">
+                    <div className="expense-card-info">
+                      <div className="expense-card-title">{exp.description || exp.category}</div>
+                      <div className="expense-card-meta">{exp.category} • {exp.date}</div>
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-state" style={{ padding: 30 }}>
-                <div className="empty-state-icon">💸</div>
-                <p>No transactions yet</p>
-              </div>
-            )}
-          </div>
+                  <div className="expense-card-amount">-₹{Number(exp.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state" style={{ padding: 24 }}>
+              <div className="empty-state-icon">💸</div>
+              <p>No transactions yet</p>
+            </div>
+          )}
         </div>
 
         {/* Budget Status */}
         {data?.budgetStatus && data.budgetStatus.length > 0 && (
-          <div className="card" style={{ marginTop: 24 }}>
+          <div className="card" style={{ marginTop: 16 }}>
             <div className="card-header">
               <span className="card-title">Budget Status</span>
               <span className="card-subtitle">Current month</span>
             </div>
-            <div style={{ display: 'grid', gap: 16 }}>
+            <div style={{ display: 'grid', gap: 12 }}>
               {data.budgetStatus.map(b => (
-                <div key={b.id} className="budget-card" style={{ padding: 16 }}>
+                <div key={b.id} className="budget-card" style={{ padding: 14 }}>
                   <div className="budget-header">
                     <span className="budget-category">{b.category}</span>
                     <div className="budget-amounts">
-                      <span className="spent">${Number(b.spent).toFixed(0)}</span> / ${Number(b.amount).toFixed(0)}
+                      <span className="spent">₹{Number(b.spent).toFixed(0)}</span> / ₹{Number(b.amount).toFixed(0)}
                     </div>
                   </div>
                   <div className="budget-progress">

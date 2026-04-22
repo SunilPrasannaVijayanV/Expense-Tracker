@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Bot, User } from 'lucide-react';
+import { MessageCircle, X, Send, Bot, User, ChevronDown } from 'lucide-react';
 
 export default function ChatBot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
       role: 'ai',
-      content: "Hi! I'm FinBot 🤖, your AI financial assistant. I can help you:\n\n• **Add expenses**: \"I spent $45 on groceries yesterday\"\n• **View spending**: \"How much did I spend this month?\"\n• **Update expenses**: \"Change my last expense to $50\"\n• **Delete expenses**: \"Delete my last expense\"\n• **Get insights**: \"Give me spending insights\"\n• **Check budgets**: \"Am I on track with my budget?\"\n\nHow can I help you?",
+      content: "Hi! I'm FinBot 🤖, your AI financial assistant. I can help you:\n\n• **Add expenses**: \"I spent ₹450 on groceries yesterday\"\n• **View spending**: \"How much did I spend this month?\"\n• **Update expenses**: \"Change my last expense to ₹500\"\n• **Delete expenses**: \"Delete my last expense\"\n• **Get insights**: \"Give me spending insights\"\n\nHow can I help you?",
     },
   ]);
   const [input, setInput] = useState('');
@@ -23,8 +23,18 @@ export default function ChatBot() {
 
   useEffect(() => {
     if (isOpen) {
-      inputRef.current?.focus();
+      setTimeout(() => inputRef.current?.focus(), 300);
     }
+  }, [isOpen]);
+
+  // Prevent body scroll when chat is open on mobile
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
   }, [isOpen]);
 
   const sendMessage = async () => {
@@ -58,7 +68,6 @@ export default function ChatBot() {
         setLastExpenseIds(data.newExpenseIds);
       }
       
-      // Dispatch custom event to notify other components to refresh
       window.dispatchEvent(new CustomEvent('expenseUpdated'));
     } catch {
       setMessages(prev => [
@@ -77,7 +86,6 @@ export default function ChatBot() {
     }
   };
 
-  // Simple markdown-like formatting
   const formatMessage = (text) => {
     return text
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -86,67 +94,93 @@ export default function ChatBot() {
   };
 
   return (
-    <div className="chat-sidebar glass" id="chat-sidebar">
-      <div className="chat-header">
-        <div className="chat-header-info">
-          <div className="chat-header-avatar">
-            <Bot size={22} color="var(--accent-primary)" />
-            <div className="online-indicator" />
-          </div>
-          <div>
-            <h3 className="text-gradient">FinBot AI</h3>
-            <p>Pro Financial Assistant</p>
-          </div>
-        </div>
-      </div>
+    <>
+      {/* ========== FAB BUTTON (mobile + desktop) ========== */}
+      {!isOpen && (
+        <button
+          className="chat-fab"
+          onClick={() => setIsOpen(true)}
+          id="chat-fab"
+          aria-label="Open AI Chat"
+        >
+          <MessageCircle size={24} />
+          <div className="chat-fab-pulse" />
+        </button>
+      )}
 
-      <div className="chat-messages" id="chat-messages">
-        {messages.map((msg, i) => (
-          <div key={i} className={`chat-message ${msg.role === 'user' ? 'user' : 'ai'}`}>
-            <div className="chat-message-content">
-              <div
-                dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }}
-              />
+      {/* ========== CHAT OVERLAY ========== */}
+      {isOpen && (
+        <div className="chat-overlay" id="chat-overlay">
+          <div className="chat-panel">
+            {/* Header */}
+            <div className="chat-header">
+              <div className="chat-header-info">
+                <div className="chat-header-avatar">
+                  <Bot size={20} color="var(--accent-primary)" />
+                  <div className="online-indicator" />
+                </div>
+                <div>
+                  <h3>FinBot AI</h3>
+                  <p className="chat-status">Online • Ready to help</p>
+                </div>
+              </div>
+              <button className="chat-close-btn" onClick={() => setIsOpen(false)} aria-label="Close chat">
+                <X size={20} />
+              </button>
             </div>
-          </div>
-        ))}
-        {loading && (
-          <div className="chat-message ai">
-            <div className="chat-message-content">
-              <div className="typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
+
+            {/* Messages */}
+            <div className="chat-messages" id="chat-messages">
+              {messages.map((msg, i) => (
+                <div key={i} className={`chat-message ${msg.role === 'user' ? 'user' : 'ai'}`}>
+                  <div className="chat-message-content">
+                    <div
+                      dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }}
+                    />
+                  </div>
+                </div>
+              ))}
+              {loading && (
+                <div className="chat-message ai">
+                  <div className="chat-message-content">
+                    <div className="typing-indicator">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input */}
+            <div className="chat-input-container">
+              <div className="chat-input-wrapper">
+                <textarea
+                  ref={inputRef}
+                  className="chat-input"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder='Ask about your spending...'
+                  rows={1}
+                  disabled={loading}
+                  id="chat-input"
+                />
+                <button
+                  className="chat-send-btn"
+                  onClick={sendMessage}
+                  disabled={!input.trim() || loading}
+                  id="chat-send-btn"
+                >
+                  <Send size={18} />
+                </button>
               </div>
             </div>
           </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      <div className="chat-input-container">
-        <div className="chat-input-wrapper">
-          <textarea
-            ref={inputRef}
-            className="chat-input"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder='Ask about your spending...'
-            rows={1}
-            disabled={loading}
-            id="chat-input"
-          />
-          <button
-            className="chat-send-btn"
-            onClick={sendMessage}
-            disabled={!input.trim() || loading}
-            id="chat-send-btn"
-          >
-            <Send size={18} />
-          </button>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }

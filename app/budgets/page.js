@@ -67,40 +67,39 @@ export default function BudgetsPage() {
       <main className="main-content">
         <div className="page-header">
           <div>
-            <h1>Budget Management</h1>
-            <p>Set and track monthly budgets by category</p>
+            <h1>Budgets</h1>
+            <p className="text-dim">Monthly spending limits</p>
           </div>
           <button className="btn btn-primary" onClick={() => setShowForm(true)} id="add-budget-btn">
             <Plus size={18} /> Set Budget
           </button>
         </div>
 
-        {/* Add Budget Modal */}
         {showForm && (
           <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false); }}>
             <div className="modal">
               <h2>Set Monthly Budget</h2>
               <form onSubmit={handleSave}>
-                <div className="form-group" style={{ marginBottom: 16 }}>
+                <div className="form-group" style={{ marginBottom: 14 }}>
                   <label>Category</label>
                   <select className="form-input" value={form.category}
                     onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))} required id="budget-category">
                     <option value="">Select category</option>
                     {availableCategories.map(c => (
-                      <option key={c.id} value={c.name}>{c.icon} {c.name}</option>
+                      <option key={c.id || c._id} value={c.name}>{c.icon} {c.name}</option>
                     ))}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Budget Amount ($)</label>
-                  <input type="number" step="0.01" min="1" className="form-input" placeholder="500.00"
+                  <label>Budget Amount (₹)</label>
+                  <input type="number" step="0.01" min="1" className="form-input" placeholder="5000"
                     value={form.amount} onChange={(e) => setForm(f => ({ ...f, amount: e.target.value }))}
                     required id="budget-amount" />
                 </div>
                 <div className="modal-actions">
                   <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
                   <button type="submit" className="btn btn-primary" disabled={saving}>
-                    {saving ? <span className="loading-spinner"></span> : 'Save Budget'}
+                    {saving ? <span className="loading-spinner" style={{ width: 18, height: 18 }}></span> : 'Save'}
                   </button>
                 </div>
               </form>
@@ -108,32 +107,31 @@ export default function BudgetsPage() {
           </div>
         )}
 
-        {/* Budget List */}
         {loading ? (
           <div className="flex-center" style={{ height: '40vh' }}>
-            <div className="loading-spinner" style={{ width: 36, height: 36 }}></div>
+            <div className="loading-spinner"></div>
           </div>
         ) : budgets.length > 0 ? (
-          <div style={{ display: 'grid', gap: 16 }}>
+          <div style={{ display: 'grid', gap: 12 }}>
             {budgets.map(b => {
               const pct = Math.min(b.percentage, 100);
               const status = b.percentage >= 100 ? 'danger' : b.percentage >= 75 ? 'warning' : 'safe';
               const catInfo = categories.find(c => c.name === b.category);
 
               return (
-                <div key={b.id} className="budget-card">
+                <div key={b.id || b._id} className="budget-card">
                   <div className="budget-header">
                     <span className="budget-category">
-                      <span style={{ fontSize: '1.25rem' }}>{catInfo?.icon || '📁'}</span>
+                      <span style={{ fontSize: '1.1rem' }}>{catInfo?.icon || '📁'}</span>
                       {b.category}
                     </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div className="budget-amounts">
-                        <span className="spent">${Number(b.spent).toFixed(2)}</span> / ${Number(b.amount).toFixed(2)}
+                        <span className="spent">₹{Number(b.spent).toFixed(0)}</span> / ₹{Number(b.amount).toFixed(0)}
                       </div>
-                      <button className="btn-icon" style={{ width: 32, height: 32, color: 'var(--accent-danger)' }}
-                        onClick={() => handleDelete(b.id)}>
-                        <Trash2 size={14} />
+                      <button className="btn-icon" style={{ width: 28, height: 28, color: 'var(--accent-red)' }}
+                        onClick={() => handleDelete(b.id || b._id)}>
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   </div>
@@ -141,43 +139,43 @@ export default function BudgetsPage() {
                     <div className={`budget-progress-bar ${status}`} style={{ width: `${pct}%` }}></div>
                   </div>
                   <div style={{
-                    display: 'flex', justifyContent: 'space-between', marginTop: 8,
-                    fontSize: '0.8rem', color: 'var(--text-muted)',
+                    display: 'flex', justifyContent: 'space-between', marginTop: 6,
+                    fontSize: '0.7rem', color: 'var(--text-muted)',
                   }}>
                     <span>{b.percentage}% used</span>
                     <span style={{
-                      color: status === 'danger' ? 'var(--accent-danger)' : status === 'warning' ? 'var(--accent-warning)' : 'var(--accent-secondary)',
+                      color: status === 'danger' ? 'var(--accent-red)' : status === 'warning' ? 'var(--accent-orange)' : 'var(--accent-green)',
                       fontWeight: 600,
                     }}>
-                      {b.percentage >= 100 ? '⚠️ Over budget!' : b.percentage >= 75 ? '⚠️ Approaching limit' : '✅ On track'}
+                      {b.percentage >= 100 ? '⚠️ Over budget' : b.percentage >= 75 ? '⚠️ Approaching' : '✅ On track'}
                     </span>
                   </div>
                 </div>
               );
             })}
 
-            {/* Summary Card */}
-            <div className="card" style={{ marginTop: 8 }}>
+            {/* Summary */}
+            <div className="card" style={{ marginTop: 4 }}>
               <div className="card-header">
-                <span className="card-title">Budget Summary</span>
+                <span className="card-title">Summary</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
                 <div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 4 }}>Total Budget</div>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>
-                    ${budgets.reduce((s, b) => s + b.amount, 0).toFixed(2)}
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 3 }}>Total Budget</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>
+                    ₹{budgets.reduce((s, b) => s + b.amount, 0).toLocaleString('en-IN')}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 4 }}>Total Spent</div>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-danger)' }}>
-                    ${budgets.reduce((s, b) => s + b.spent, 0).toFixed(2)}
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 3 }}>Total Spent</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-red)' }}>
+                    ₹{budgets.reduce((s, b) => s + b.spent, 0).toLocaleString('en-IN')}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 4 }}>Remaining</div>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-secondary)' }}>
-                    ${(budgets.reduce((s, b) => s + b.amount, 0) - budgets.reduce((s, b) => s + b.spent, 0)).toFixed(2)}
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 3 }}>Remaining</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-green)' }}>
+                    ₹{(budgets.reduce((s, b) => s + b.amount, 0) - budgets.reduce((s, b) => s + b.spent, 0)).toLocaleString('en-IN')}
                   </div>
                 </div>
               </div>
@@ -188,9 +186,9 @@ export default function BudgetsPage() {
             <div className="empty-state">
               <div className="empty-state-icon">🎯</div>
               <h3>No budgets set</h3>
-              <p>Create monthly budgets to track your spending by category</p>
-              <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => setShowForm(true)}>
-                <Plus size={18} /> Set Your First Budget
+              <p>Create monthly budgets to track spending</p>
+              <button className="btn btn-primary" style={{ marginTop: 14 }} onClick={() => setShowForm(true)}>
+                <Plus size={18} /> Set First Budget
               </button>
             </div>
           </div>

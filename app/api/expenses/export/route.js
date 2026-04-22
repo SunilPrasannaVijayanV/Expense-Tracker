@@ -18,6 +18,7 @@ export async function GET(request) {
     const sortBy = searchParams.get('sortBy') || 'date';
     const sortOrder = searchParams.get('sortOrder') || 'DESC';
     const paymentMethod = searchParams.get('paymentMethod');
+    const format = searchParams.get('format') || 'csv';
 
     await dbConnect();
 
@@ -47,6 +48,10 @@ export async function GET(request) {
 
     const sortDir = sortOrder === 'ASC' ? 1 : -1;
     const expenses = await Expense.find(query).sort({ [sortBy]: sortDir, createdAt: -1 });
+
+    if (format === 'json') {
+      return NextResponse.json({ expenses });
+    }
 
     // Build CSV
     const escapeCell = (val) => {
